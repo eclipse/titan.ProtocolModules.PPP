@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ Copyright (c) 2015 Ericsson
+
+  All rights reserved. This program and the accompanying materials
+  are made available under the terms of the Eclipse Public License v1.0
+  which accompanies this distribution, and is available at
+  http://www.eclipse.org/legal/epl-v10.html
+
+
+   File:               PPP_CNL113599.tpd
+   Description:        tpd project file
+   Rev:                R2A
+   Prodnr:             CNL 113 599
+
+ -->
+<TITAN_Project_File_Information version="1.0">
+  <ProjectName>PPP_CNL113599</ProjectName>
+  <ReferencedProjects>
+    <ReferencedProject name="IP_CNL113418" projectLocationURI="../IP_CNL113418/IP_CNL113418.tpd"/>
+    <ReferencedProject name="ProtocolModules_Common" projectLocationURI="../COMMON/ProtocolModules_Common.tpd"/>
+  </ReferencedProjects>
+  <Folders>
+    <FolderResource projectRelativePath="src" relativeURI="src"/>
+  </Folders>
+  <Files>
+    <FileResource projectRelativePath="src/EAP_EncDec.cc" relativeURI="src/EAP_EncDec.cc"/>
+    <FileResource projectRelativePath="src/EAP_Types.ttcn" relativeURI="src/EAP_Types.ttcn"/>
+    <FileResource projectRelativePath="src/PPP_EncDec.cc" relativeURI="src/PPP_EncDec.cc"/>
+    <FileResource projectRelativePath="src/PPP_Types.ttcn" relativeURI="src/PPP_Types.ttcn"/>
+  </Files>
+  <ActiveConfiguration>Default</ActiveConfiguration>
+  <Configurations>
+    <Configuration name="Default">
+      <ProjectProperties>
+        <MakefileSettings>
+          <generateInternalMakefile>true</generateInternalMakefile>
+          <GNUMake>true</GNUMake>
+          <incrementalDependencyRefresh>true</incrementalDependencyRefresh>
+          <targetExecutable>bin/PPP_CNL113599</targetExecutable>
+        </MakefileSettings>
+        <LocalBuildSettings>
+          <workingDirectory>bin</workingDirectory>
+        </LocalBuildSettings>
+      </ProjectProperties>
+    </Configuration>
+  </Configurations>
+</TITAN_Project_File_Information>

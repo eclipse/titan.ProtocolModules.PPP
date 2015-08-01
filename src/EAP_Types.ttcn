@@ -1,0 +1,911 @@
+/******************************************************************************
+* Copyright (c) 2008, 2015  Ericsson AB
+* All rights reserved. This program and the accompanying materials
+* are made available under the terms of the Eclipse Public License v1.0
+* which accompanies this distribution, and is available at
+* http://www.eclipse.org/legal/epl-v10.html
+*
+* Contributors:
+* Timea Moder
+* Endre Kulcsar
+* Tibor Bende
+* Gabor Szalai
+******************************************************************************/
+//
+//  File:               EAP_Types.ttcn
+//  Rev:                R2A
+//  Prodnr:             CNL 113 599
+//  Reference:          RFC 3748 PPP Extensible Authentication Protocol (EAP)
+//                      Obsolate: RFC 2284
+//                      draft-haverinen-pppext-eap-sim-16.txt                       
+//                      draft-arkko-pppext-eap-aka-15.txt
+//
+
+module EAP_Types {
+
+import from General_Types all;
+
+external function f_enc_PDU_EAP(in PDU_EAP pdu) return octetstring
+with { extension "prototype(convert)" extension "encode(RAW)" }
+
+external function f_dec_PDU_EAP(in octetstring stream) return PDU_EAP
+with { extension "prototype(convert)" extension "decode(RAW)" }
+
+// Used in RADIUS
+external function f_enc_PDU_EAP_list(in PDU_EAP_list pdu) return octetstring;
+external function f_dec_PDU_EAP_list(in octetstring stream) return PDU_EAP_list;
+
+external function f_enc_eap_sim_attrib_list(in eap_sim_attrib_list pdu) return octetstring
+with { extension "prototype(convert)" extension "encode(RAW)" }
+
+external function f_dec_eap_sim_attrib_list(in octetstring stream) return eap_sim_attrib_list
+with { extension "prototype(convert)" extension "decode(RAW)" }
+
+external function f_enc_eap_aka_attrib_list(in eap_aka_attrib_list pdu) return octetstring
+with { extension "prototype(convert)" extension "encode(RAW)" }
+
+external function f_dec_eap_aka_attrib_list(in octetstring stream) return eap_aka_attrib_list
+with { extension "prototype(convert)" extension "decode(RAW)" }
+
+external function f_calc_HMAC(in octetstring key, in octetstring input, in integer out_length) return octetstring;
+external function f_initEAPPortDescriptor(inout EAP_port_descriptor descriptor);
+external function f_get_EAP_parameters(inout octetstring pl_ext_eap_message,inout EAP_port_descriptor pl_descriptor,in boolean incoming_message)
+external function f_set_Ki(in integer identifier, in octetstring input, inout EAP_port_descriptor descriptor);
+external function f_set_K(in integer identifier, in octetstring input, inout EAP_port_descriptor descriptor);
+external function f_set_SQN(in integer identifier, in octetstring input, inout EAP_port_descriptor descriptor);
+external function f_set_SQN_MS(in integer identifier, in octetstring input, inout EAP_port_descriptor descriptor);
+external function f_set_AMF(in integer identifier, in octetstring input, inout EAP_port_descriptor descriptor);
+
+external function f_calc_AKA_Keys(in octetstring pl_eap_identity, in octetstring pl_AKA_K,in octetstring pl_rand,
+              inout octetstring pl_AK,inout octetstring pl_Kaut,inout octetstring pl_Kencr)  return octetstring 
+external function f_calc_A3A8(in octetstring key,in octetstring rand)return octetstring;
+external function f_calc_SRES(in octetstring key,in octetstring rand)return octetstring;
+external function f_calc_Kaut(in octetstring input,inout octetstring kencr) return octetstring;
+external function f_encrypt_at_encr(in octetstring key,in octetstring input,in octetstring ivec,in boolean decrypt) return octetstring;
+
+external function f_crypt_atSimEncrData(
+  in at_sim_encr_data pl_encr_data,
+  in octetstring key,in octetstring ivec,in boolean decrypt)
+return at_sim_encr_data;
+
+external function f_crypt_atAKAEncrData(
+  in at_aka_encr_data pl_encr_data,
+  in octetstring key,in octetstring ivec,in boolean decrypt)
+return at_aka_encr_data;
+
+
+modulepar{
+  OCT16 tsp_SIM_Ki := '00112233445566778899AABBCCDDEEFF'O; //pre-shared-secret
+  OCT16 tsp_AKA_K := '0123456789ABCDEF0123456789ABCDEF'O;     
+  OCT6 tsp_AKA_SQN := '000000000000'O;     
+  OCT6 tsp_AKA_SQN_MS := '000000000000'O;     
+  OCT2 tsp_AKA_AMF := '0000'O;  
+  boolean tsp_skip_auth_encr := false;
+  boolean tsp_global_keying := false; // if this is set to true, 256 will be used instead of EAP Identifier
+  boolean tsp_debugging := false;
+  }
+
+//================================================================
+// Types from RADIUS test port, info needed for external functions
+//================================================================
+type record EAP_port_descriptor {
+  boolean serverMode,
+  OCT16       nonce_mt[257],
+  OCT16       nonce_s[257],
+  octetstring n_sres[257],
+  OCT16       Kencr[257],
+  OCT16       Kaut[257],
+  OCT16       Ki[257],
+  octetstring eap_identity[257],
+  octetstring eap_sim_version_list[257],
+  OCT2        eap_sim_selected_version[257],
+  OCT16       K[257],
+  OCT6        AK[257],
+  OCT6        SQN[257],
+  OCT6        SQN_MS[257],
+  octetstring XDOUT[257],
+  OCT2        AMF[257],
+  OCT16       ivec,
+  OCT16       last_calculated_mac,
+  octetstring nonce,
+  integer current_identifier
+}
+
+
+// RFC3748, Obsoletes:RFC2284
+/********************
+EAP-SIM Start
+********************/
+//draft-haverinen-pppext-eap-sim-16.txt
+
+// 9.2
+type record at_sim_version_list
+{
+  eap_sim_attribute_type_enum  attrib,
+  integer                      attrib_length,
+  integer                      actual_length,
+  OCT2_list                    version_list
+} with {  variant "PRESENCE (attrib = at_version_list)";
+          variant (actual_length) "FIELDLENGTH(16)";
+         variant (actual_length) "BYTEORDER(last)";
+         variant (attrib_length) "LENGTHTO(attrib,attrib_length,actual_length,version_list)";
+         variant (actual_length) "LENGTHTO(version_list)";
+         variant (attrib_length) "UNIT(dword32)";
+         variant  "PADDING(dword32)"
+       }
+
+type record of OCT2 OCT2_list;
+
+// 9.3
+type record at_sim_selected_version
+{
+  eap_sim_attribute_type_enum  attrib,
+  integer                      attrib_length, // =1
+  OCT2                         attrib_data
+} with { variant "PRESENCE (attrib = at_selected_version)";
+  variant (attrib_length) "LENGTHTO(attrib,attrib_length,attrib_data)";
+  variant (attrib_length) "UNIT(dword32)"
+}
+
+// 9.4
+type record at_sim_nonce_mt
+{
+  eap_sim_attribute_type_enum  attrib,
+  integer                      attrib_length, // =5
+  OCT2                         reserved,
+  OCT16                        attrib_value
+} with {  variant "PRESENCE (attrib = at_nonce_mt)";
+  variant (attrib_length) "LENGTHTO(attrib,attrib_length,reserved,attrib_value)";
+  variant (attrib_length) "UNIT(dword32)"
+}
+
+// 9.5
+type record at_sim_permanent_id_req
+{
+  eap_sim_attribute_type_enum  attrib,
+  integer                      attrib_length, // =1
+  OCT2                         reserved
+} with { variant "PRESENCE (attrib = at_permanent_id_req)";
+  variant (attrib_length) "LENGTHTO(attrib,attrib_length,reserved)";
+  variant (attrib_length) "UNIT(dword32)"
+}
+
+// 9.6
+type record at_sim_any_id_req
+{
+  eap_sim_attribute_type_enum  attrib,
+  integer                      attrib_length, // =1
+  OCT2                         reserved
+} with { variant "PRESENCE (attrib = at_any_id_req)";
+  variant (attrib_length) "LENGTHTO(attrib,attrib_length,reserved)";
+  variant (attrib_length) "UNIT(dword32)"
+}
+
+// 9.7
+type record at_sim_fullauth_id_req
+{
+  eap_sim_attribute_type_enum  attrib,
+  integer                      attrib_length, // =1
+  OCT2                         reserved
+} with { variant "PRESENCE (attrib = at_fullauth_id_req)";
+  variant (attrib_length) "LENGTHTO(attrib,attrib_length,reserved)";
+  variant (attrib_length) "UNIT(dword32)"
+}
+
+// 9.8
+type record at_sim_identity
+{
+  eap_sim_attribute_type_enum  attrib,
+  integer                      attrib_length,
+  integer                      actual_length,
+  octetstring                  attrib_value
+} with { variant "PRESENCE (attrib = at_identity)";
+         variant (attrib_length) "LENGTHTO(attrib,attrib_length,actual_length,attrib_value)";
+         variant (attrib_length) "UNIT(dword32)"
+         variant (actual_length) "FIELDLENGTH(16)";
+         variant (actual_length) "BYTEORDER(last)";
+         variant (actual_length) "LENGTHTO(attrib_value)";
+         variant  "PADDING(dword32)"
+       }
+
+// 9.9
+type record at_sim_rand
+{
+  eap_sim_attribute_type_enum attrib,
+  integer                     attrib_length,
+  OCT2                        reserved,
+  OCT16_list                  attrib_value
+} with { variant "PRESENCE (attrib = at_rand)";
+  variant (attrib_length) "LENGTHTO(attrib,attrib_length,reserved,attrib_value)";
+  variant (attrib_length) "UNIT(dword32)"
+}
+
+type record of OCT16 OCT16_list;
+
+// 9.10
+type record at_sim_next_pseudonym
+{
+  eap_sim_attribute_type_enum  attrib,
+  integer                      attrib_length,
+  integer                      actual_length,
+  octetstring                  attrib_value
+} with { variant "PRESENCE (attrib = at_next_pseudonym)";
+         variant (attrib_length) "LENGTHTO(attrib,attrib_length,actual_length,attrib_value)";
+         variant (attrib_length) "UNIT(dword32)"
+         variant (actual_length) "FIELDLENGTH(16)";
+         variant (actual_length) "BYTEORDER(last)";
+         variant (actual_length) "LENGTHTO(attrib_value)";
+         variant  "PADDING(dword32)"
+       }
+
+// 9.11
+type record at_sim_next_reauth_id
+{
+  eap_sim_attribute_type_enum  attrib,
+  integer                      attrib_length,
+  integer                      actual_length,
+  octetstring                  attrib_value
+} with { variant "PRESENCE (attrib = at_next_reauth_id)";
+         variant (attrib_length) "LENGTHTO(attrib,attrib_length,actual_length,attrib_value)";
+         variant (attrib_length) "UNIT(dword32)"
+         variant (actual_length) "FIELDLENGTH(16)";
+         variant (actual_length) "BYTEORDER(last)";
+         variant (actual_length) "LENGTHTO(attrib_value)";
+         variant  "PADDING(dword32)"
+       }
+
+// 9.12
+type record at_sim_iv
+{
+  eap_sim_attribute_type_enum  attrib,
+  integer                      attrib_length, // =5
+  OCT2                         reserved,
+  OCT16                        attrib_value
+} with { variant "PRESENCE (attrib = at_iv)";
+  variant (attrib_length) "LENGTHTO(attrib,attrib_length,reserved,attrib_value)";
+  variant (attrib_length) "UNIT(dword32)"
+}
+
+type record at_sim_encr_data
+{
+  eap_sim_attribute_type_enum attrib,
+  integer                     attrib_length,
+  OCT2                        reserved,
+  at_sim_nested               attrib_value
+} with {  variant "PRESENCE (attrib = at_encr_data)";
+  variant (attrib_length) "LENGTHTO(attrib,attrib_length,reserved,attrib_value)";
+  variant (attrib_length) "UNIT(dword32)"
+}
+
+type record at_sim_padding
+{
+  eap_sim_attribute_type_enum attrib,
+  integer                     attrib_length, //=1 or 2 or 3
+  octetstring                 attrib_value
+} with { variant "PRESENCE (attrib = at_padding)";
+  variant (attrib_length) "LENGTHTO(attrib,attrib_length,attrib_value)";
+  variant (attrib_length) "UNIT(dword32)"
+}
+
+type union at_sim_nested
+{
+  octetstring           encrypted_attrib_value,
+  eap_sim_attrib_list   decrypted_attrib_value
+}
+
+// 9.13
+type record at_sim_result_ind
+{
+  eap_sim_attribute_type_enum  attrib,
+  integer                      attrib_length, // =1
+  OCT2                         reserved
+} with { variant "PRESENCE (attrib = at_result_ind)";
+  variant (attrib_length) "LENGTHTO(attrib,attrib_length,reserved)";
+  variant (attrib_length) "UNIT(dword32)"
+}
+
+// 9.14
+type record at_sim_mac
+{
+  eap_sim_attribute_type_enum  attrib,
+  integer                      attrib_length, // =5
+  OCT2                         reserved,
+  OCT16                        attrib_value
+} with { variant "PRESENCE (attrib = at_mac)";
+  variant (attrib_length) "LENGTHTO(attrib,attrib_length,reserved,attrib_value)";
+  variant (attrib_length) "UNIT(dword32)"
+}
+
+// 9.15
+type record at_sim_counter
+{
+  eap_sim_attribute_type_enum  attrib,
+  integer                      attrib_length, // =1
+  OCT2                         attrib_data
+} with { variant "PRESENCE (attrib = at_counter)";
+  variant (attrib_length) "LENGTHTO(attrib,attrib_length,attrib_data)";
+  variant (attrib_length) "UNIT(dword32)"
+}
+
+// 9.16
+type record at_sim_counter_too_small
+{
+  eap_sim_attribute_type_enum  attrib,
+  integer                      attrib_length, // =1
+  OCT2                         reserved
+} with { variant "PRESENCE (attrib = at_counter_too_small)";
+  variant (attrib_length) "LENGTHTO(attrib,attrib_length,reserved)";
+  variant (attrib_length) "UNIT(dword32)"
+}
+
+// 9.17
+type record at_sim_nonce_s
+{
+  eap_sim_attribute_type_enum  attrib,
+  integer                      attrib_length, // =5
+  OCT2                         reserved,
+  OCT16                        attrib_value
+} with { variant "PRESENCE (attrib = at_nonce_s)";
+  variant (attrib_length) "LENGTHTO(attrib,attrib_length,reserved,attrib_value)";
+  variant (attrib_length) "UNIT(dword32)"
+}
+
+// 9.18
+type record at_sim_notification
+{
+  eap_sim_attribute_type_enum  attrib,
+  integer                      attrib_length, // =1
+  OCT2                         attrib_data
+} with { variant "PRESENCE (attrib = at_notification)";
+  variant (attrib_length) "LENGTHTO(attrib,attrib_length,attrib_data)";
+  variant (attrib_length) "UNIT(dword32)"
+}
+
+// 9.19
+type record at_sim_client_error_code
+{
+  eap_sim_attribute_type_enum  attrib,
+  integer                      attrib_length, // =1
+  OCT2                         attrib_data
+} with { variant "PRESENCE (attrib = at_client_error_code)";
+  variant (attrib_length) "LENGTHTO(attrib,attrib_length,attrib_data)";
+  variant (attrib_length) "UNIT(dword32)"
+}
+
+type enumerated eap_sim_attribute_type_enum
+{
+  at_rand                (1),
+  at_padding             (6),
+  at_nonce_mt            (7),
+  at_permanent_id_req   (10),
+  at_mac                (11),
+  at_notification       (12),
+  at_any_id_req         (13),
+  at_identity           (14),
+  at_version_list       (15),
+  at_selected_version   (16),
+  at_fullauth_id_req    (17),
+  at_counter            (19),
+  at_counter_too_small  (20),
+  at_nonce_s            (21),
+  at_client_error_code  (22),
+  at_iv                (129),
+  at_encr_data         (130),
+  at_next_pseudonym    (132),
+  at_next_reauth_id    (133),
+  at_result_ind        (135)
+} with {
+  variant "FIELDLENGTH(8)"
+  variant "BYTEORDER(last)"
+  }
+
+type union eap_sim_attrib
+{
+  at_sim_permanent_id_req   f_at_permanent_id_req,
+  at_sim_fullauth_id_req    f_at_fullauth_id_req,
+  at_sim_any_id_req         f_at_any_id_req,
+  at_sim_version_list       f_at_version_list,
+  at_sim_nonce_mt           f_at_nonce_mt,
+  at_sim_identity           f_at_identity,
+  at_sim_selected_version   f_at_selected_version,
+  at_sim_rand               f_at_rand,
+  at_sim_iv                 f_at_iv,
+  at_sim_encr_data          f_at_encr_data,
+  at_sim_mac                f_at_mac,
+  at_sim_next_pseudonym     f_at_next_pseudonym,
+  at_sim_nonce_s            f_at_nonce_s,
+  at_sim_next_reauth_id     f_at_next_reauth_id,
+  at_sim_padding            f_at_padding,
+  at_sim_counter            f_at_counter,
+  at_sim_counter_too_small  f_at_counter_too_small,
+  at_sim_notification       f_at_notification,
+  at_sim_result_ind         f_at_result_ind,
+  at_sim_client_error_code  f_at_client_error_code
+} with {
+  variant "TAG (    
+  f_at_permanent_id_req,  attrib = at_permanent_id_req;
+  f_at_fullauth_id_req,   attrib = at_fullauth_id_req;
+  f_at_any_id_req,        attrib = at_any_id_req;
+  f_at_version_list,      attrib = at_version_list;
+  f_at_nonce_mt,          attrib = at_nonce_mt;
+  f_at_identity,          attrib = at_identity;
+  f_at_selected_version,  attrib = at_selected_version;
+  f_at_rand,              attrib = at_rand;
+  f_at_iv,                attrib = at_iv;
+  f_at_encr_data,         attrib = at_encr_data;
+  f_at_mac,               attrib = at_mac;
+  f_at_next_pseudonym,    attrib = at_next_pseudonym;
+  f_at_nonce_s,           attrib = at_nonce_s;
+  f_at_next_reauth_id,    attrib = at_next_reauth_id;
+  f_at_padding,           attrib = at_padding;
+  f_at_counter,           attrib = at_counter;
+  f_at_counter_too_small, attrib = at_counter_too_small;
+  f_at_notification,      attrib = at_notification;
+  f_at_result_ind,        attrib = at_result_ind;
+  f_at_client_error_code, attrib = at_client_error_code;)"
+}
+
+type set of eap_sim_attrib eap_sim_attrib_list;
+
+type enumerated eap_sim_subtype_enum
+{
+  eap_sim_start              (10),
+  eap_sim_challenge          (11),
+  eap_sim_notification       (12),
+  eap_sim_re_authentication  (13),
+  eap_sim_client_error       (14)
+} with {
+  variant "FIELDLENGTH(8)"
+  variant "BYTEORDER(last)"
+}
+
+type record eap_sim_data
+{
+  eap_sim_subtype_enum   subtype,
+  OCT2                   reserved,
+  eap_sim_attrib_list    attrib_list
+}
+
+/********************
+EAP-AKA start
+********************/
+// draft-arkko-pppext-eap-aka-15.txt
+
+type enumerated eap_aka_subtype_enum
+{
+  eap_aka_challenge               (1),
+  eap_aka_authentication_reject   (2),
+  eap_aka_synchronization_failure (4),
+  eap_aka_identity                (5),
+  eap_aka_notification           (12),
+  eap_aka_reauthentication       (13),
+  eap_aka_client_error           (14)
+} with {
+  variant "FIELDLENGTH(8)"
+  variant "BYTEORDER(last)"
+  }
+
+// 9.2
+type record at_aka_permanent_id_req
+{
+  eap_aka_attribute_type_enum  attrib,
+  integer                      attrib_length, // =1
+  OCT2                         reserved
+} with { variant "PRESENCE (attrib = at_permanent_id_req)";
+         variant (attrib_length) "LENGTHTO(attrib,attrib_length,reserved)";
+         variant (attrib_length) "UNIT(dword32)"
+       }
+
+// 9.3
+type record at_aka_any_id_req
+{
+  eap_aka_attribute_type_enum  attrib,
+  integer                      attrib_length, // =1
+  OCT2                         reserved
+} with { variant "PRESENCE (attrib = at_any_id_req)";
+         variant (attrib_length) "LENGTHTO(attrib,attrib_length,reserved)";
+         variant (attrib_length) "UNIT(dword32)"
+       }
+
+// 9.4
+type record at_aka_fullauth_id_req
+{
+  eap_aka_attribute_type_enum  attrib,
+  integer                      attrib_length, // =1
+  OCT2                         reserved
+} with { variant "PRESENCE (attrib = at_fullauth_id_req)";
+         variant (attrib_length) "LENGTHTO(attrib,attrib_length,reserved)";
+         variant (attrib_length) "UNIT(dword32)"
+       }
+
+// 9.5
+type record at_aka_identity
+{
+  eap_aka_attribute_type_enum  attrib,
+  integer                      attrib_length,
+  integer                      actual_length,
+  octetstring                  attrib_value
+} with { variant "PRESENCE (attrib = at_identity)";
+         variant (actual_length) "FIELDLENGTH(16)";
+         variant (actual_length) "BYTEORDER(last)";
+         variant (actual_length) "LENGTHTO(attrib_value)";
+         variant (attrib_length) "LENGTHTO(attrib,attrib_length,actual_length,attrib_value)";
+         variant (attrib_length) "UNIT(dword32)"
+         variant  "PADDING(dword32)"
+       }
+
+// 9.6
+type record at_aka_rand
+{
+  eap_aka_attribute_type_enum attrib,
+  integer                     attrib_length, // =5
+  OCT2                        reserved,
+  OCT16                       attrib_value
+} with { variant "PRESENCE (attrib = at_rand)";
+         variant (attrib_length) "LENGTHTO(attrib,attrib_length,reserved,attrib_value)";
+         variant (attrib_length) "UNIT(dword32)"
+       }
+
+// 9.7
+type record at_aka_autn
+{
+  eap_aka_attribute_type_enum attrib,
+  integer                     attrib_length, // =5
+  OCT2                        reserved,
+  OCT16                       attrib_value
+} with { variant "PRESENCE (attrib = at_autn)";
+         variant (attrib_length) "LENGTHTO(attrib,attrib_length,reserved,attrib_value)";
+         variant (attrib_length) "UNIT(dword32)"
+       }
+
+// 9.8
+type record at_aka_res
+{
+  eap_aka_attribute_type_enum attrib,
+  integer                     attrib_length,
+  integer                     res_length,
+  octetstring                 attrib_value
+} with { variant "PRESENCE (attrib = at_res)";
+         variant (attrib_length) "LENGTHTO(attrib,attrib_length,res_length,attrib_value)";
+         variant (attrib_length) "UNIT(dword32)";
+         variant (res_length) "FIELDLENGTH(16)";
+         variant (res_length) "BYTEORDER(last)";
+         variant (res_length) "LENGTHTO(attrib_value)";
+         variant  "PADDING(dword32)"
+       }
+
+// 9.9
+type record at_aka_auts
+{
+  eap_aka_attribute_type_enum  attrib,
+  integer                      attrib_length, // =4
+  OCT14                        attrib_value
+} with { variant "PRESENCE (attrib = at_auts)";
+         variant (attrib_length) "LENGTHTO(attrib,attrib_length,attrib_value)";
+         variant (attrib_length) "UNIT(dword32)"
+       }
+
+// 9.10
+type record at_aka_next_pseudonym
+{
+  eap_aka_attribute_type_enum  attrib,
+  integer                      attrib_length,
+  integer                      actual_length,
+  octetstring                  attrib_value
+} with { variant "PRESENCE (attrib = at_next_pseudonym)";
+         variant (actual_length) "FIELDLENGTH(16)";
+         variant (actual_length) "BYTEORDER(last)";
+         variant (actual_length) "LENGTHTO(attrib_value)";
+         variant (attrib_length) "LENGTHTO(attrib,attrib_length,actual_length,attrib_value)";
+         variant (attrib_length) "UNIT(dword32)"
+         variant  "PADDING(dword32)"
+       }
+
+// 9.11
+type record at_aka_next_reauth_id
+{
+  eap_aka_attribute_type_enum  attrib,
+  integer                      attrib_length,
+  integer                      actual_length,
+  octetstring                  attrib_value
+} with { variant "PRESENCE (attrib = at_next_reauth_id)";
+         variant (actual_length) "FIELDLENGTH(16)";
+         variant (actual_length) "BYTEORDER(last)";
+         variant (actual_length) "LENGTHTO(attrib_value)";
+         variant (attrib_length) "LENGTHTO(attrib,attrib_length,actual_length,attrib_value)";
+         variant (attrib_length) "UNIT(dword32)"
+         variant  "PADDING(dword32)"
+       }
+
+// 9.12
+type record at_aka_iv
+{
+  eap_aka_attribute_type_enum attrib,
+  integer                     attrib_length, // =5
+  OCT2                        reserved,
+  OCT16                       attrib_value
+} with { variant "PRESENCE (attrib = at_iv)";
+         variant (attrib_length) "LENGTHTO(attrib,attrib_length,reserved,attrib_value)";
+         variant (attrib_length) "UNIT(dword32)"
+       }
+
+type record at_aka_encr_data
+{
+  eap_aka_attribute_type_enum attrib,
+  integer                     attrib_length,
+  OCT2                        reserved,
+  at_aka_nested               attrib_value
+} with { variant "PRESENCE (attrib = at_encr_data)";
+         variant (attrib_length) "LENGTHTO(attrib,attrib_length,reserved,attrib_value)";
+         variant (attrib_length) "UNIT(dword32)"
+}
+
+type record at_aka_padding
+{
+  eap_aka_attribute_type_enum  attrib,
+  integer                      attrib_length,
+  octetstring                  attrib_value
+} with { variant "PRESENCE (attrib = at_padding)";
+         variant (attrib_length) "LENGTHTO(attrib,attrib_length,attrib_value)";
+         variant (attrib_length) "UNIT(dword32)"
+       }
+
+type union at_aka_nested
+{
+  octetstring           encrypted_attrib_value,
+  eap_aka_attrib_list   decrypted_attrib_value
+}
+
+// 9.13
+type record at_aka_checkcode
+{
+  eap_aka_attribute_type_enum attrib,
+  integer                     attrib_length, // =1 or 6
+  OCT2                        reserved,
+  OCT20                       attrib_value optional
+} with { variant (attrib_length) "LENGTHTO(attrib,attrib_length,reserved,attrib_value)";
+         variant (attrib_length) "UNIT(dword32)"
+}
+
+// 9.14
+type record at_aka_result_ind
+{
+  eap_aka_attribute_type_enum  attrib,
+  integer                      attrib_length, // =1
+  OCT2                         reserved
+} with { variant "PRESENCE (attrib = at_result_ind)";
+         variant (attrib_length) "LENGTHTO(attrib,attrib_length,reserved)";
+         variant (attrib_length) "UNIT(dword32)"
+       }
+
+// 9.15
+type record at_aka_mac
+{
+  eap_aka_attribute_type_enum attrib,
+  integer                     attrib_length, // =5
+  OCT2                        reserved,
+  OCT16                       attrib_value
+} with { variant "PRESENCE (attrib = at_mac)";
+         variant (attrib_length) "LENGTHTO(attrib,attrib_length,reserved,attrib_value)";
+         variant (attrib_length) "UNIT(dword32)"
+       }
+
+// 9.16
+type record at_aka_counter
+{
+  eap_aka_attribute_type_enum  attrib,
+  integer                      attrib_length, // =1
+  OCT2                         attrib_value
+} with { variant "PRESENCE (attrib = at_counter)";
+         variant (attrib_length) "LENGTHTO(attrib,attrib_length,attrib_value)";
+         variant (attrib_length) "UNIT(dword32)"
+       }
+
+// 9.17
+type record at_aka_counter_too_small
+{
+  eap_aka_attribute_type_enum  attrib,
+  integer                      attrib_length, // =1
+  OCT2                         reserved
+} with { variant "PRESENCE (attrib = at_counter_too_small)";
+         variant (attrib_length) "LENGTHTO(attrib,attrib_length,reserved)";
+         variant (attrib_length) "UNIT(dword32)"
+       }
+
+// 9.18
+type record at_aka_nonce_s
+{
+  eap_aka_attribute_type_enum attrib,
+  integer                     attrib_length, // =5
+  OCT2                        reserved,
+  OCT16                       attrib_value
+} with { variant "PRESENCE (attrib = at_nonce_s)";
+         variant (attrib_length) "LENGTHTO(attrib,attrib_length,reserved,attrib_value)";
+         variant (attrib_length) "UNIT(dword32)"
+       }
+
+// 9.19
+type record at_aka_notification
+{
+  eap_aka_attribute_type_enum  attrib,
+  integer                      attrib_length, // =1
+  OCT2                         attrib_value
+} with { variant "PRESENCE (attrib = at_notification)";
+         variant (attrib_length) "LENGTHTO(attrib,attrib_length,attrib_value)";
+         variant (attrib_length) "UNIT(dword32)"
+       }
+
+// 9.20
+type record at_aka_client_error_code
+{
+  eap_aka_attribute_type_enum  attrib,
+  integer                      attrib_length, // =1
+  OCT2                         attrib_value
+} with { variant "PRESENCE (attrib = at_client_error_code)";
+         variant (attrib_length) "LENGTHTO(attrib,attrib_length,attrib_value)";
+         variant (attrib_length) "UNIT(dword32)"
+       }
+
+
+
+type enumerated eap_aka_attribute_type_enum
+{
+  at_rand               (1),
+  at_autn               (2),
+  at_res                (3),
+  at_auts               (4),
+  at_padding            (6),
+  at_permanent_id_req  (10),
+  at_mac               (11),
+  at_notification      (12),
+  at_any_id_req        (13),
+  at_identity          (14),
+  at_fullauth_id_req   (17),
+  at_counter           (19),
+  at_counter_too_small (20),
+  at_nonce_s           (21),
+  at_client_error_code (22),
+  at_iv               (129),
+  at_encr_data        (130),
+  at_next_pseudonym   (132),
+  at_next_reauth_id   (133),
+  at_checkcode        (134),
+  at_result_ind       (135)
+} with {
+  variant "FIELDLENGTH(8)"
+  variant "BYTEORDER(last)"
+  }
+
+type union eap_aka_attrib
+{
+  at_aka_mac               f_at_mac,
+  at_aka_iv                f_at_iv,
+  at_aka_encr_data         f_at_encr_data,
+  at_aka_padding           f_at_padding,
+  at_aka_rand              f_at_rand,
+  at_aka_autn              f_at_autn,
+  at_aka_next_pseudonym    f_at_next_pseudonym,
+  at_aka_next_reauth_id    f_at_next_reauth_id,
+  at_aka_res               f_at_res,
+  at_aka_auts              f_at_auts,
+  at_aka_permanent_id_req  f_at_permanent_id_req,
+  at_aka_fullauth_id_req   f_at_fullauth_id_req, 
+  at_aka_any_id_req        f_at_any_id_req,
+  at_aka_identity          f_at_identity,
+  at_aka_nonce_s           f_at_nonce_s,
+  at_aka_counter           f_at_counter,
+  at_aka_counter_too_small f_at_counter_too_small,
+  at_aka_notification      f_at_notification,
+  at_aka_checkcode         f_at_checkcode,
+  at_aka_result_ind        f_at_result_ind,
+  at_aka_client_error_code f_at_client_error_code
+} with {
+  variant "TAG (    
+  f_at_mac,               attrib = at_mac;
+  f_at_iv,                attrib = at_iv;
+  f_at_encr_data,         attrib = at_encr_data;
+  f_at_padding,           attrib = at_padding;
+  f_at_rand,              attrib = at_rand;
+  f_at_autn,              attrib = at_autn;
+  f_at_next_pseudonym,    attrib = at_next_pseudonym;
+  f_at_next_reauth_id,    attrib = at_next_reauth_id;
+  f_at_res,               attrib = at_res;
+  f_at_auts,              attrib = at_auts;
+  f_at_permanent_id_req,  attrib = at_permanent_id_req;
+  f_at_fullauth_id_req,   attrib = at_fullauth_id_req;
+  f_at_any_id_req,        attrib = at_any_id_req;
+  f_at_identity,          attrib = at_identity;
+  f_at_nonce_s,           attrib = at_nonce_s;
+  f_at_counter,           attrib = at_counter;
+  f_at_counter_too_small, attrib = at_counter_too_small;
+  f_at_notification,      attrib = at_notification;
+  f_at_checkcode,         attrib = at_checkcode;
+  f_at_result_ind,        attrib = at_result_ind;
+  f_at_client_error_code, attrib = at_client_error_code;)"
+}
+
+type set of eap_aka_attrib eap_aka_attrib_list;
+
+type record eap_aka_data
+{
+  eap_aka_subtype_enum   subtype,
+  OCT2                   reserved,
+  eap_aka_attrib_list    attrib_list
+}
+
+/********************
+EAP-AKA End
+********************/
+type union eap_packet_type_data_t
+{
+  octetstring            f_eap_identity,
+  octetstring            f_eap_notification,
+  octetstring            f_eap_nak,
+  octetstring            f_eap_md5_challenge,
+  octetstring            f_eap_one_time_password,
+  octetstring            f_eap_generic_token_card,
+  eap_sim_data           f_eap_sim,
+  eap_aka_data           f_eap_aka
+}
+
+//eap_aka added
+type enumerated eap_packet_type_enum
+{
+  eap_identity             (1),
+  eap_notification         (2),
+  eap_nak                  (3),
+  eap_md5_challenge        (4),
+  eap_one_time_password    (5),
+  eap_generic_token_card   (6),
+  eap_sim                 (18),
+  eap_aka                 (23)
+} with {
+  variant "FIELDLENGTH(8)"
+  variant "BYTEORDER(last)"
+  }
+
+type record eap_packet_data
+{
+  eap_packet_type_enum        eap_packet_type,
+  eap_packet_type_data_t      eap_packet_type_data
+} with {
+  variant (eap_packet_type_data) "CROSSTAG(
+  f_eap_identity,             eap_packet_type =eap_identity;
+  f_eap_notification,         eap_packet_type =eap_notification;
+  f_eap_nak,                  eap_packet_type =eap_nak;
+  f_eap_md5_challenge,        eap_packet_type =eap_md5_challenge;
+  f_eap_one_time_password,    eap_packet_type =eap_one_time_password;
+  f_eap_generic_token_card,   eap_packet_type =eap_generic_token_card;
+  f_eap_sim,                  eap_packet_type =eap_sim;
+  f_eap_aka,                  eap_packet_type =eap_aka;
+ )"
+}
+
+
+type enumerated eap_packet_code_enum
+{
+  request_code            (1),
+  response_code           (2),
+  success_code            (3),
+  failure_code            (4),
+  unknown_code            (5)
+} with {
+  variant "FIELDLENGTH(8)"
+  variant "BYTEORDER(last)"
+  }
+
+type record of PDU_EAP PDU_EAP_list;
+
+type record PDU_EAP   
+{
+  eap_packet_code_enum  code,
+  integer               identifier,
+  integer               packet_length,
+  eap_packet_data       packet_data optional
+} with { variant (packet_length) "FIELDLENGTH(16)";
+         variant (packet_length) "BYTEORDER(last)";
+         variant (packet_length) "LENGTHTO(code,identifier,packet_length,packet_data)";
+       }
+
+
+} with { encode "RAW" } // End module

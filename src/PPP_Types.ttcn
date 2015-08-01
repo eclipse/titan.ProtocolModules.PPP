@@ -1,0 +1,618 @@
+/******************************************************************************
+* Copyright (c) 2008, 2015  Ericsson AB
+* All rights reserved. This program and the accompanying materials
+* are made available under the terms of the Eclipse Public License v1.0
+* which accompanies this distribution, and is available at
+* http://www.eclipse.org/legal/epl-v10.html
+*
+* Contributors:
+* Timea Moder
+* Endre Kulcsar
+* Tibor Bende
+* Gabor Szalai
+******************************************************************************/
+//
+//  File:               PPP_Types.ttcn
+//  Rev:                R2A
+//  Prodnr:             CNL 113 599
+//  Reference:          RFC 1661(PPP), 1332(IPCP), 1877, 1994(CHAP), 1334(PAP)       
+//                      3748(EAP) and RFC 1662 (Address and Control fields in Frame)                       
+//                      
+//
+
+module PPP_Types {
+
+import from General_Types all;
+import from EAP_Types all;
+import from IP_Types all;
+
+
+external function enc_PDU_PPP(in PDU_PPP pdu) return octetstring
+with { extension "prototype(convert)"
+       extension "encode(RAW)"
+     }
+
+external function dec_PDU_PPP(in octetstring stream) return PDU_PPP
+// Special decode function which sets pPP_AddressControl field to "omit"
+// if Address and Control are not present in the message
+
+
+
+// LCP Options ==================================
+
+// RFC 1661 6.1
+type record MaxReceiveUnit
+{
+ OCT1           typeField,
+ integer        lengthInd,
+ OCT2           maxReceiveUnitValue
+} with { variant "PRESENCE (typeField = '01'O)";
+         variant (lengthInd) "LENGTHTO(typeField,lengthInd,maxReceiveUnitValue)";
+       }
+
+// RFC 1661 6.2
+type record AuthenticationProtocol
+{
+ OCT1           typeField,
+ integer        lengthInd,
+ OCT2           authenticationProtocolValue,
+ octetstring    data optional          
+} with { variant "PRESENCE (typeField = '03'O)";
+         variant (lengthInd) "LENGTHTO(typeField,lengthInd,authenticationProtocolValue,data)";
+       }
+
+// RFC 1661 6.3
+type record QualityProtocol
+{
+ OCT1           typeField,
+ integer        lengthInd,
+ OCT2           qualityProtocolValue, 
+ octetstring    data optional    
+} with { variant "PRESENCE (typeField = '04'O)";
+         variant (lengthInd) "LENGTHTO(typeField,lengthInd,qualityProtocolValue,data)";
+       }
+       
+// RFC 1661 6.4
+type record MagicNumber
+{
+ OCT1           typeField,
+ integer        lengthInd,
+ OCT4           magicNumberValue
+} with { variant "PRESENCE (typeField = '05'O)";
+         variant (lengthInd) "LENGTHTO(typeField,lengthInd,magicNumberValue)";
+       }
+
+// RFC 1661 6.5
+type record ProtocolFieldCompression
+{
+ OCT1           typeField,
+ integer        lengthInd
+} with { variant "PRESENCE (typeField = '07'O)";
+         variant (lengthInd) "LENGTHTO(typeField,lengthInd)";
+       }
+
+// RFC 1661 6.6
+type record AddressAndControlFieldCompression
+{
+ OCT1           typeField,
+ integer        lengthInd
+} with { variant "PRESENCE (typeField = '08'O)";
+         variant (lengthInd) "LENGTHTO(typeField,lengthInd)";
+       }
+
+
+type record of LCPOption LCPOptions
+
+// RFC 1661 6.1 
+type union LCPOption
+{
+   MaxReceiveUnit                       maxReceiveUnit,                   
+   AuthenticationProtocol               authenticationProtocol,           
+   QualityProtocol                      qualityProtocol,                  
+   MagicNumber                          magicNumber,                      
+   ProtocolFieldCompression             protocolFieldCompression,         
+   AddressAndControlFieldCompression    addressAndControlFieldCompression
+}
+
+
+// LCP messages ==================================
+
+// RFC 1661 5.1
+type record LCP_ConfigureRequest
+{
+ OCT1          code,       // '01'O
+ OCT1          identifier,
+ integer       lengthInd,
+ LCPOptions    options 
+} with { variant "PRESENCE (code = '01'O)";
+         variant (lengthInd) "LENGTHTO(code,identifier,lengthInd,options)";
+         variant (lengthInd) "FIELDLENGTH(16)";
+         variant (lengthInd) "BYTEORDER(last)";
+       }
+
+// RFC 1661 5.2
+type record LCP_ConfigureAck
+{
+ OCT1          code,       // '02'O
+ OCT1          identifier,
+ integer       lengthInd,
+ LCPOptions    options 
+} with { variant "PRESENCE (code = '02'O)";
+         variant (lengthInd) "LENGTHTO(code,identifier,lengthInd,options)";
+         variant (lengthInd) "FIELDLENGTH(16)";
+         variant (lengthInd) "BYTEORDER(last)";
+       }
+       
+// RFC 1661 5.3
+type record LCP_ConfigureNak
+{
+ OCT1          code,      // '03'O
+ OCT1          identifier,
+ integer       lengthInd,
+ LCPOptions    options 
+} with { variant "PRESENCE (code = '03'O)";
+         variant (lengthInd) "LENGTHTO(code,identifier,lengthInd,options)";
+         variant (lengthInd) "FIELDLENGTH(16)";
+         variant (lengthInd) "BYTEORDER(last)";
+       }
+
+// RFC 1661 5.4
+type record LCP_ConfigureReject
+{
+ OCT1          code,      // '04'O
+ OCT1          identifier,
+ integer       lengthInd,
+ LCPOptions    options 
+} with { variant "PRESENCE (code = '04'O)";
+         variant (lengthInd) "LENGTHTO(code,identifier,lengthInd,options)";
+         variant (lengthInd) "FIELDLENGTH(16)";
+         variant (lengthInd) "BYTEORDER(last)";
+       }
+
+// RFC 1661 5.5
+type record LCP_TerminateRequest
+{
+ OCT1          code,      // '05'O
+ OCT1          identifier,
+ integer       lengthInd,
+ octetstring   data optional
+} with { variant "PRESENCE (code = '05'O)";
+         variant (lengthInd) "LENGTHTO(code,identifier,lengthInd,data)";
+         variant (lengthInd) "FIELDLENGTH(16)";
+         variant (lengthInd) "BYTEORDER(last)";
+       }
+
+// RFC 1661 5.5
+type record LCP_TerminateAck
+{
+ OCT1          code,      // '06'O
+ OCT1          identifier,
+ integer       lengthInd,
+ octetstring   data optional
+} with { variant "PRESENCE (code = '06'O)";
+         variant (lengthInd) "LENGTHTO(code,identifier,lengthInd,data)";
+         variant (lengthInd) "FIELDLENGTH(16)";
+         variant (lengthInd) "BYTEORDER(last)";
+       }
+
+// RFC 1661 5.6
+type record LCP_CodeReject
+{
+ OCT1          code,      // '07'O
+ OCT1          identifier,
+ integer       lengthInd,
+ octetstring   rejectedPacket  // structure ??
+} with { variant "PRESENCE (code = '07'O)"; 
+         variant (lengthInd) "LENGTHTO(code,identifier,lengthInd,rejectedPacket)";
+         variant (lengthInd) "FIELDLENGTH(16)";
+         variant (lengthInd) "BYTEORDER(last)";
+       }
+
+// RFC 1661 5.7
+type record LCP_ProtocolReject
+{
+ OCT1          code,      // '08'O
+ OCT1          identifier,
+ integer       lengthInd,
+ OCT2          rejectedProtocol,
+ octetstring   rejectedInformation // structure ??
+} with { variant "PRESENCE (code = '08'O)";  
+         variant (lengthInd) "LENGTHTO(code,identifier,lengthInd,rejectedProtocol,rejectedInformation)";
+         variant (lengthInd) "FIELDLENGTH(16)";
+         variant (lengthInd) "BYTEORDER(last)";
+       }
+
+// RFC 1661 5.8
+type record LCP_EchoRequest
+{
+ OCT1          code,      // '09'O
+ OCT1          identifier,
+ integer       lengthInd,
+ OCT4          magicNumber,
+ octetstring   data optional
+} with { variant "PRESENCE (code = '09'O)";  
+         variant (lengthInd) "LENGTHTO(code,identifier,lengthInd,magicNumber,data)";
+         variant (lengthInd) "FIELDLENGTH(16)";
+         variant (lengthInd) "BYTEORDER(last)";
+       }
+
+// RFC 1661 5.8
+type record LCP_EchoReply
+{
+ OCT1          code,      // '0A'O
+ OCT1          identifier,
+ integer       lengthInd,
+ OCT4          magicNumber,
+ octetstring   data optional
+} with { variant "PRESENCE (code = '0A'O)";  
+         variant (lengthInd) "LENGTHTO(code,identifier,lengthInd,magicNumber,data)";
+         variant (lengthInd) "FIELDLENGTH(16)";
+         variant (lengthInd) "BYTEORDER(last)";
+       }
+
+// RFC 1661 5.9
+type record LCP_DiscardRequest
+{
+ OCT1          code,      // '0B'O
+ OCT1          identifier,
+ integer       lengthInd,
+ OCT4          magicNumber,
+ octetstring   data optional
+} with { variant "PRESENCE (code = '0B'O)";  
+         variant (lengthInd) "LENGTHTO(code,identifier,lengthInd,magicNumber,data)";
+         variant (lengthInd) "FIELDLENGTH(16)";
+         variant (lengthInd) "BYTEORDER(last)";
+       }
+
+// IPCP options ==================================
+ 
+// RFC 1332 3.2
+type record IP_Compression_Protocol
+{
+ OCT1           typeField,
+ integer        lengthInd,
+ OCT2           iP_Compression_ProtocolValue,
+ octetstring    data optional
+} with { variant "PRESENCE (typeField = '02'O)";
+         variant (lengthInd) "LENGTHTO(typeField,lengthInd,iP_Compression_ProtocolValue,data)";
+       } 
+ 
+// RFC 1332 3.3
+type record IP_Address
+{
+ OCT1           typeField,
+ integer        lengthInd,
+ OCT4           iP_AddressValue
+} with { variant "PRESENCE (typeField = '03'O)";
+         variant (lengthInd) "LENGTHTO(typeField,lengthInd,iP_AddressValue)";
+       }  
+ 
+// RFC 1877 1.1
+type record PrimaryDNSServerAddress 
+{
+ OCT1           typeField,       // '81'O
+ integer        lengthInd,
+ OCT4           primaryDNSAddressValue
+} with { variant "PRESENCE (typeField = '81'O)";
+         variant (lengthInd) "LENGTHTO(typeField,lengthInd,primaryDNSAddressValue)";
+       }
+
+// RFC 1877 1.2
+type record PrimaryNBNSServerAddress
+{
+ OCT1           typeField,      // '82'O
+ integer        lengthInd,
+ OCT4           primaryNBNSServerAddressValue       
+} with { variant "PRESENCE (typeField = '82'O)";
+         variant (lengthInd) "LENGTHTO(typeField,lengthInd,primaryNBNSServerAddressValue)";
+       }
+ 
+// RFC 1877 1.3
+type record SecondaryDNSServerAddress
+{
+ OCT1           typeField,     // '83'O
+ integer        lengthInd,
+ OCT4           secondaryDNSServerAddressValue
+} with { variant "PRESENCE (typeField = '83'O)";
+         variant (lengthInd) "LENGTHTO(typeField,lengthInd,secondaryDNSServerAddressValue)";
+       } 
+ 
+// RFC 1877 1.4
+type record SecondaryNBNSServerAddress
+{
+ OCT1           typeField,     // '84'O
+ integer        lengthInd,
+ OCT4           secondaryNBNSServerAddressValue                
+} with { variant "PRESENCE (typeField = '84'O)";
+         variant (lengthInd) "LENGTHTO(typeField,lengthInd,secondaryNBNSServerAddressValue)";
+       }  
+ 
+
+type record of IPCPOption IPCPOptions
+  
+type union IPCPOption
+{
+// IP_Addresses                  iP_Addresses, deprecated according to RFC 1332 3.1
+ IP_Compression_Protocol       iP_Compression_Protocol,
+ IP_Address                    iP_Address, 
+ PrimaryDNSServerAddress       primaryDNSServerAddress,
+ PrimaryNBNSServerAddress      primaryNBNSServerAddress,
+ SecondaryDNSServerAddress     secondaryDNSServerAddress,
+ SecondaryNBNSServerAddress    secondaryNBNSServerAddress
+}
+
+
+// IPCP messages ==================================
+
+type record IPCP_ConfigureRequest
+{
+ OCT1          code,       // '01'O
+ OCT1          identifier,
+ integer       lengthInd,
+ IPCPOptions   options 
+} with { variant "PRESENCE (code = '01'O)";
+         variant (lengthInd) "LENGTHTO(code,identifier,lengthInd,options)";
+         variant (lengthInd) "FIELDLENGTH(16)";
+         variant (lengthInd) "BYTEORDER(last)";
+       }
+
+type record IPCP_ConfigureAck
+{
+ OCT1          code,       // '02'O
+ OCT1          identifier,
+ integer       lengthInd,
+ IPCPOptions   options 
+} with { variant "PRESENCE (code = '02'O)";
+         variant (lengthInd) "LENGTHTO(code,identifier,lengthInd,options)";
+         variant (lengthInd) "FIELDLENGTH(16)";
+         variant (lengthInd) "BYTEORDER(last)";
+       }
+
+type record IPCP_ConfigureNak
+{
+ OCT1          code,       // '03'O
+ OCT1          identifier,
+ integer       lengthInd,
+ IPCPOptions   options 
+} with { variant "PRESENCE (code = '03'O)";
+         variant (lengthInd) "LENGTHTO(code,identifier,lengthInd,options)";
+         variant (lengthInd) "FIELDLENGTH(16)";
+         variant (lengthInd) "BYTEORDER(last)";
+       }
+
+type record IPCP_ConfigureReject
+{
+ OCT1          code,       // '04'O
+ OCT1          identifier,
+ integer       lengthInd,
+ IPCPOptions   options 
+} with { variant "PRESENCE (code = '04'O)";
+         variant (lengthInd) "LENGTHTO(code,identifier,lengthInd,options)";
+         variant (lengthInd) "FIELDLENGTH(16)";
+         variant (lengthInd) "BYTEORDER(last)";
+        }        
+
+type record IPCP_TerminateRequest
+{
+ OCT1          code,      // '05'O
+ OCT1          identifier,
+ integer       lengthInd,
+ octetstring   data optional
+} with { variant "PRESENCE (code = '05'O)";
+         variant (lengthInd) "LENGTHTO(code,identifier,lengthInd,data)";
+         variant (lengthInd) "FIELDLENGTH(16)";
+         variant (lengthInd) "BYTEORDER(last)";
+       }
+       
+type record IPCP_TerminateAck
+{
+ OCT1          code,      // '06'O
+ OCT1          identifier,
+ integer       lengthInd,
+ octetstring   data optional
+} with { variant "PRESENCE (code = '06'O)";
+         variant (lengthInd) "LENGTHTO(code,identifier,lengthInd,data)";
+         variant (lengthInd) "FIELDLENGTH(16)";
+         variant (lengthInd) "BYTEORDER(last)";
+       }
+
+type record IPCP_CodeReject
+{
+ OCT1          code,      // '07'O
+ OCT1          identifier,
+ integer       lengthInd,
+ octetstring   rejectedPacket  // structure ??
+} with { variant "PRESENCE (code = '07'O)"; 
+         variant (lengthInd) "LENGTHTO(code,identifier,lengthInd,rejectedPacket)";
+         variant (lengthInd) "FIELDLENGTH(16)";
+         variant (lengthInd) "BYTEORDER(last)";
+       }
+
+
+// CHAP messages ==================================
+
+// RFC 1994 4.1
+type record CHAP_Challenge 
+{
+ OCT1          code,      // '01'O
+ OCT1          identifier,
+ integer       lengthInd, 
+ integer       valueSize,
+ octetstring   valueField length (1..infinity),
+ octetstring   name length (1..infinity)
+} with { variant "PRESENCE (code = '01'O)"; 
+         variant (lengthInd) "LENGTHTO(code,identifier,lengthInd,valueSize,valueField,name)";
+         variant (lengthInd) "FIELDLENGTH(16)";         
+         variant (lengthInd) "BYTEORDER(last)"; 
+         variant (valueSize) "LENGTHTO(valueField)";
+       }         
+         
+// RFC 1994 4.1         
+type record CHAP_Response
+{
+ OCT1          code,      // '02'O
+ OCT1          identifier,
+ integer       lengthInd, 
+ integer       valueSize,
+ octetstring   valueField length (1..infinity),
+ octetstring   name length (1..infinity) 
+} with { variant "PRESENCE (code = '02'O)";  
+         variant (lengthInd) "LENGTHTO(code,identifier,lengthInd,valueSize,valueField,name)";
+         variant (lengthInd) "FIELDLENGTH(16)";         
+         variant (lengthInd) "BYTEORDER(last)"; 
+         variant (valueSize) "LENGTHTO(valueField)";
+       }         
+         
+
+// RFC 1994 4.2
+type record CHAP_Success
+{
+ OCT1          code,      // '03'O
+ OCT1          identifier,
+ integer       lengthInd, 
+ octetstring   messageField
+} with { variant "PRESENCE (code = '03'O)";  
+         variant (lengthInd) "LENGTHTO(code,identifier,lengthInd,messageField)";
+         variant (lengthInd) "FIELDLENGTH(16)";  
+         variant (lengthInd) "BYTEORDER(last)";
+       }        
+             
+
+// RFC 1994 4.2
+type record CHAP_Failure
+{
+ OCT1          code,      // '04'O
+ OCT1          identifier,
+ integer       lengthInd, 
+ octetstring   messageField
+} with { variant "PRESENCE (code = '04'O)";  
+         variant (lengthInd) "LENGTHTO(code,identifier,lengthInd,messageField)";
+         variant (lengthInd) "FIELDLENGTH(16)";
+         variant (lengthInd) "BYTEORDER(last)";
+       }         
+              
+
+// CHAP messages ==================================
+
+type record PAP_AuthenticateRequest
+{
+ OCT1          code,          //'01'O
+ OCT1          identifier,
+ integer       lengthInd, 
+ integer       peerIdLengthInd,
+ octetstring   peerId            optional,
+ integer       passwordLengthInd,
+ octetstring   password          optional
+} with { variant "PRESENCE (code = '01'O)";  
+         variant (lengthInd) "LENGTHTO(code,identifier,lengthInd,peerIdLengthInd,peerId,passwordLengthInd,password)";
+         variant (lengthInd) "FIELDLENGTH(16)";
+         variant (lengthInd) "BYTEORDER(last)";
+         variant (peerIdLengthInd) "LENGTHTO(peerId)";
+         variant (passwordLengthInd) "LENGTHTO(password)";         
+       }           
+                 
+type record PAP_AuthenticateAck
+{
+ OCT1          code,          //'02'O
+ OCT1          identifier,
+ integer       lengthInd, 
+ integer       msgLengthInd,
+ charstring    messageField optional 
+} with { variant "PRESENCE (code = '02'O)";  
+         variant (lengthInd) "LENGTHTO(code,identifier,lengthInd,msgLengthInd,messageField)";
+         variant (lengthInd) "FIELDLENGTH(16)";
+         variant (lengthInd) "BYTEORDER(last)";
+         variant (msgLengthInd) "LENGTHTO(messageField)";
+       }
+
+
+type record PAP_AuthenticateNak
+{
+ OCT1          code,         //'03'O
+ OCT1          identifier,
+ integer       lengthInd, 
+ integer       msgLengthInd,
+ charstring    messageField optional 
+} with { variant "PRESENCE (code = '03'O)";  
+         variant (lengthInd) "LENGTHTO(code,identifier,lengthInd,msgLengthInd,messageField)";
+         variant (lengthInd) "FIELDLENGTH(16)";
+         variant (lengthInd) "BYTEORDER(last)";
+         variant (msgLengthInd) "LENGTHTO(messageField)";
+       }
+
+//===========================================
+
+type union LCP
+{
+  LCP_ConfigureRequest  lCP_ConfigureRequest,    
+  LCP_ConfigureAck      lCP_ConfigureAck,        
+  LCP_ConfigureNak      lCP_ConfigureNak,        
+  LCP_ConfigureReject   lCP_ConfigureReject,     
+  LCP_TerminateRequest  lCP_TerminateRequest,    
+  LCP_TerminateAck      lCP_TerminateAck,        
+  LCP_CodeReject        lCP_CodeReject,         
+  LCP_ProtocolReject    lCP_ProtocolReject,      
+  LCP_EchoRequest       lCP_EchoRequest,         
+  LCP_EchoReply         lCP_EchoReply,           
+  LCP_DiscardRequest    lCP_DiscardRequest      
+}
+
+type union IPCP // NCP -> IPCP
+{
+  IPCP_ConfigureRequest    iPCP_ConfigureRequest,    
+  IPCP_ConfigureAck        iPCP_ConfigureAck,        
+  IPCP_ConfigureNak        iPCP_ConfigureNak,        
+  IPCP_ConfigureReject     iPCP_ConfigureReject,    
+  IPCP_TerminateRequest    iPCP_TerminateRequest,   
+  IPCP_TerminateAck        iPCP_TerminateAck,        
+  IPCP_CodeReject          iPCP_CodeReject          
+}
+
+type union CHAP
+{
+  CHAP_Challenge           cHAP_Challenge,
+  CHAP_Response            cHAP_Response,
+  CHAP_Success             cHAP_Success,
+  CHAP_Failure             cHAP_Failure
+}
+
+type union  PAP
+{
+  PAP_AuthenticateRequest  pAP_AuthenticateRequest,
+  PAP_AuthenticateAck      pAP_AuthenticateAck,
+  PAP_AuthenticateNak      pAP_AuthenticateNak
+}
+
+type union Information
+{
+  LCP           lcp,  
+  IPCP          ipcp,
+  CHAP          chap,
+  PAP           pap,
+  PDU_EAP       eap,
+  IPv4_packet   ip4
+}
+
+// PPP PDU =============================
+
+type record PDU_PPP
+{
+  OCT2          pPP_AddressControl optional, // 'FF03'O used in framing
+  OCT2          protocol,      
+  Information   information,
+  octetstring   padding optional   
+} with { variant 
+    (information)"CROSSTAG(
+      lcp,    protocol = 'C021'O;
+      ipcp,   protocol = '8021'O;   // RFC 1340 page 64 
+      chap,   protocol = 'C223'O;   // RFC 1994 4
+      pap,    protocol = 'C023'O;   // RFC 1334 2.1     
+      eap,    protocol = 'C227'O;   // RFC 3748 3.2.1    
+      ip4,    protocol = '0021'O;   // RFC 1332   
+  )"
+}
+
+
+
+
+} with { encode "RAW"} //end of module
