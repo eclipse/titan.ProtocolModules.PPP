@@ -36,10 +36,12 @@ PDU__PPP dec__PDU__PPP(const OCTETSTRING& stream)
   Information info;
   LCP elcp;
   IPCP eipcp;
+  IPv6CP eipv6cp;
   CHAP echap;
   PAP epap;
   PDU__EAP eeap;
   IP__Types::IPv4__packet eip4;
+  IP__Types::IPv6__packet eip6;
     
   //Determine if address and header fields are present
   const unsigned char* stream_ptr = (const unsigned char*)stream;
@@ -107,7 +109,30 @@ PDU__PPP dec__PDU__PPP(const OCTETSTRING& stream)
             pdu.information().eap() = eeap;
           }
           else TTCN_warning("Unsupported PPP message received with protocol :%x %x",stream_ptr[2],stream_ptr[3]);
-      }  
+      }
+      else if (stream_ptr[3] == 0x57)
+      {
+        if (stream_ptr[2] == 0x80)
+        {
+          eipv6cp.decode(IPv6CP_descr_, buf, TTCN_EncDec::CT_RAW);
+          pdu.information().ipv6cp() = eipv6cp;
+        }
+        else
+        {
+          if (stream_ptr[2] == 0x00)
+          {
+            //update lengthinfo due to IPv6 header
+            lengthinfo = 40 + oct2int(substr(stream,8,2));
+            buf.put_os(substr(stream,4,lengthinfo));
+            //imported from CNL 113 418 IP Protocol Module
+            pdu.information().ip6() = IP__Types::f__IPv6__dec(OCTETSTRING(lengthinfo, buf.get_read_data()));
+          }
+          else
+          {
+            TTCN_warning("Unsupported PPP message received with protocol :%x %x",stream_ptr[2],stream_ptr[3]);
+          }
+        }
+      }
       else
       {
         TTCN_warning("Unsupported PPP message received with protocol :%x %x",stream_ptr[2],stream_ptr[3]);
@@ -195,7 +220,27 @@ PDU__PPP dec__PDU__PPP(const OCTETSTRING& stream)
           {
             TTCN_warning("Unsupported PPP message received with protocol :%x  %x",stream_ptr[0],stream_ptr[1]); 
           }
-       }
+      }
+      else if (stream_ptr[3] == 0x57)
+      {
+        if (stream_ptr[2] == 0x80)
+        {
+          eipv6cp.decode(IPv6CP_descr_, buf, TTCN_EncDec::CT_RAW);
+          pdu.information().ipv6cp() = eipv6cp;
+        }
+        else
+        {
+          if (stream_ptr[2] == 0x00)
+          {
+            eip6.decode(IP__Types::IPv6__packet_descr_, buf, TTCN_EncDec::CT_RAW);
+            pdu.information().ip6() = eip6;
+          }
+          else
+          {
+            TTCN_warning("Unsupported PPP message received with protocol :%x %x",stream_ptr[2],stream_ptr[3]);
+          }
+        }
+      }
       else
       {
         TTCN_warning("Unsupported PPP message received with protocol :%x  %x",stream_ptr[0],stream_ptr[1]);

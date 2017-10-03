@@ -16,8 +16,8 @@
 //  Rev:                R2A
 //  Prodnr:             CNL 113 599
 //  Reference:          RFC 1661(PPP), 1332(IPCP), 1877, 1994(CHAP), 1334(PAP)       
-//                      3748(EAP) and RFC 1662 (Address and Control fields in Frame)                       
-//                      
+//                      3748(EAP), RFC 1662 (Address and Control fields in Frame),
+//                      RFC 5072(IPv6 over PPP)
 //
 
 module PPP_Types {
@@ -428,6 +428,112 @@ type record IPCP_CodeReject
          variant (lengthInd) "BYTEORDER(last)";
        }
 
+// IPv6CP options ==================================
+
+// RFC 5072 4.1
+type record InterfaceIdentifier
+{
+ OCT1           typeField,     // '01'O
+ integer        lengthInd,
+ OCT8           identifierValue
+} with { variant "PRESENCE (typeField = '01'O)";
+         variant (lengthInd) "LENGTHTO(typeField,lengthInd,identifierValue)";
+       }
+
+
+type record of IPv6CPOption IPv6CPOptions
+
+type union IPv6CPOption
+{
+ InterfaceIdentifier       interfaceIdentifier
+}
+
+// IPv6CP messages ==================================
+
+type record IPv6CP_ConfigureRequest
+{
+ OCT1          code,       // '01'O
+ OCT1          identifier,
+ integer       lengthInd,
+ IPv6CPOptions options
+} with { variant "PRESENCE (code = '01'O)";
+         variant (lengthInd) "LENGTHTO(code,identifier,lengthInd,options)";
+         variant (lengthInd) "FIELDLENGTH(16)";
+         variant (lengthInd) "BYTEORDER(last)";
+       }
+
+type record IPv6CP_ConfigureAck
+{
+ OCT1          code,       // '02'O
+ OCT1          identifier,
+ integer       lengthInd,
+ IPv6CPOptions options
+} with { variant "PRESENCE (code = '02'O)";
+         variant (lengthInd) "LENGTHTO(code,identifier,lengthInd,options)";
+         variant (lengthInd) "FIELDLENGTH(16)";
+         variant (lengthInd) "BYTEORDER(last)";
+       }
+
+type record IPv6CP_ConfigureNak
+{
+ OCT1          code,       // '03'O
+ OCT1          identifier,
+ integer       lengthInd,
+ IPv6CPOptions options
+} with { variant "PRESENCE (code = '03'O)";
+         variant (lengthInd) "LENGTHTO(code,identifier,lengthInd,options)";
+         variant (lengthInd) "FIELDLENGTH(16)";
+         variant (lengthInd) "BYTEORDER(last)";
+       }
+
+type record IPv6CP_ConfigureReject
+{
+ OCT1          code,       // '04'O
+ OCT1          identifier,
+ integer       lengthInd,
+ IPv6CPOptions options
+} with { variant "PRESENCE (code = '04'O)";
+         variant (lengthInd) "LENGTHTO(code,identifier,lengthInd,options)";
+         variant (lengthInd) "FIELDLENGTH(16)";
+         variant (lengthInd) "BYTEORDER(last)";
+        }
+
+type record IPv6CP_TerminateRequest
+{
+ OCT1          code,      // '05'O
+ OCT1          identifier,
+ integer       lengthInd,
+ octetstring   data optional
+} with { variant "PRESENCE (code = '05'O)";
+         variant (lengthInd) "LENGTHTO(code,identifier,lengthInd,data)";
+         variant (lengthInd) "FIELDLENGTH(16)";
+         variant (lengthInd) "BYTEORDER(last)";
+       }
+
+type record IPv6CP_TerminateAck
+{
+ OCT1          code,      // '06'O
+ OCT1          identifier,
+ integer       lengthInd,
+ octetstring   data optional
+} with { variant "PRESENCE (code = '06'O)";
+         variant (lengthInd) "LENGTHTO(code,identifier,lengthInd,data)";
+         variant (lengthInd) "FIELDLENGTH(16)";
+         variant (lengthInd) "BYTEORDER(last)";
+       }
+
+type record IPv6CP_CodeReject
+{
+ OCT1          code,      // '07'O
+ OCT1          identifier,
+ integer       lengthInd,
+ octetstring   rejectedPacket
+} with { variant "PRESENCE (code = '07'O)";
+         variant (lengthInd) "LENGTHTO(code,identifier,lengthInd,rejectedPacket)";
+         variant (lengthInd) "FIELDLENGTH(16)";
+         variant (lengthInd) "BYTEORDER(last)";
+       }
+
 
 // CHAP messages ==================================
 
@@ -540,6 +646,7 @@ type record PAP_AuthenticateNak
          variant (msgLengthInd) "LENGTHTO(messageField)";
        }
 
+
 //===========================================
 
 type union LCP
@@ -568,6 +675,17 @@ type union IPCP // NCP -> IPCP
   IPCP_CodeReject          iPCP_CodeReject          
 }
 
+type union IPv6CP
+{
+  IPv6CP_ConfigureRequest  iPv6CP_ConfigureRequest,
+  IPv6CP_ConfigureAck      iPv6CP_ConfigureAck,
+  IPv6CP_ConfigureNak      iPv6CP_ConfigureNak,
+  IPv6CP_ConfigureReject   iPv6CP_ConfigureReject,
+  IPv6CP_TerminateRequest  iPv6CP_TerminateRequest,
+  IPv6CP_TerminateAck      iPv6CP_TerminateAck,
+  IPv6CP_CodeReject        iPv6CP_CodeReject
+}
+
 type union CHAP
 {
   CHAP_Challenge           cHAP_Challenge,
@@ -587,10 +705,12 @@ type union Information
 {
   LCP           lcp,  
   IPCP          ipcp,
+  IPv6CP        ipv6cp,
   CHAP          chap,
   PAP           pap,
   PDU_EAP       eap,
-  IPv4_packet   ip4
+  IPv4_packet   ip4,
+  IPv6_packet   ip6
 }
 
 // PPP PDU =============================
@@ -605,10 +725,12 @@ type record PDU_PPP
     (information)"CROSSTAG(
       lcp,    protocol = 'C021'O;
       ipcp,   protocol = '8021'O;   // RFC 1340 page 64 
+      ipv6cp, protocol = '8057'O;   // RFC 5072 3
       chap,   protocol = 'C223'O;   // RFC 1994 4
       pap,    protocol = 'C023'O;   // RFC 1334 2.1     
       eap,    protocol = 'C227'O;   // RFC 3748 3.2.1    
       ip4,    protocol = '0021'O;   // RFC 1332   
+      ip6,    protocol = '0057'O;   // RFC 5072 2
   )"
 }
 
